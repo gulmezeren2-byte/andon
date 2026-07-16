@@ -1,0 +1,37 @@
+name: Refresh demo asset
+
+# Manual trigger only. Regenerates docs/demo.svg from the committed script so
+# the README screenshot always shows what the tool actually prints — even
+# when the maintainer's local machine is having a day.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+
+      - name: Regenerate
+        run: |
+          uv sync --dev
+          uv run python scripts/make_demo_svg.py
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- docs/demo.svg; then
+            echo "demo.svg unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/demo.svg
+          git commit -m "Refresh demo.svg from scripts/make_demo_svg.py [skip ci]"
+          git push
