@@ -20,9 +20,13 @@ def test_parse_sheet_and_range() -> None:
     assert ref.cell_range == "A1:D50"
 
 
-def test_sheet_syntax_on_csv_rejected() -> None:
-    with pytest.raises(SourceError, match="only valid for Excel"):
-        parse_ref("data/orders.csv#Sheet1", BASE)
+def test_hash_after_csv_is_part_of_the_filename() -> None:
+    # '#' introduces a sheet only after an Excel path. Everywhere else it is a
+    # legal filename character, so this parses as a file called
+    # "orders.csv#Sheet1", not as a sheet reference on a CSV.
+    ref = parse_ref("data/orders.csv#Sheet1", BASE)
+    assert ref.path == BASE / "data/orders.csv#Sheet1"
+    assert ref.sheet is None and ref.cell_range is None
 
 
 def test_unknown_alias_lists_declared_sources(orders_csv: Path) -> None:
