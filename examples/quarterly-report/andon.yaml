@@ -1,0 +1,83 @@
+# Verification spec for the Q2 2026 quarterly report.
+#
+# The report was drafted by an AI agent from data/orders.csv. Before it goes
+# to anyone's inbox, every number it claims gets re-derived from the source.
+# Six of these checks fail or flag on purpose — see make_example.py for the
+# planted defects.
+version: 1
+
+sources:
+  orders: data/orders.csv
+  report: report.xlsx#Summary
+  regions: report.xlsx#Summary!A8:C12   # region table: region | share_pct | revenue
+
+checks:
+  # --- the data itself carries its assumptions -------------------------------
+  - name: order ids are unique
+    schema.unique:
+      source: orders
+      column: order_id
+
+  - name: no missing trading days in Q2
+    schema.date_continuity:
+      source: orders
+      column: order_date
+      freq: D
+
+  # --- does the report agree with the data? ----------------------------------
+  - name: shipped order count matches the data
+    reconcile.row_count:
+      left:  { source: orders, where: "status == 'shipped'" }
+      right: { source: report, cell: B3 }
+
+  - name: net revenue matches the data
+    reconcile.sum:
+      column: revenue
+      left:  { source: orders, where: "status == 'shipped'" }
+      right: { source: report, cell: B4 }
+      tolerance: 0.5%
+
+  - name: average order value matches the data
+    reconcile.aggregate:
+      agg: mean
+      column: revenue
+      left:  { source: orders, where: "status == 'shipped'" }
+      right: { source: report, cell: B5 }
+      tolerance: 1%
+
+  - name: regional revenue reconciles per region
+    reconcile.group_sum:
+      column: revenue
+      by: region
+      left:  { source: orders, where: "status == 'shipped'" }
+      right: { source: regions }
+      tolerance: 0.5
+
+  # --- does the report agree with itself? ------------------------------------
+  - name: region shares sum to 100
+    internal.percent_sum:
+      source: report
+      range: B9:B12
+
+  - name: monthly total row is honest
+    internal.total_row:
+      source: report
+      parts: B15:B17
+      total: B18
+      tolerance: 0.01
+
+  # --- is the workbook mechanically sound? -----------------------------------
+  # Scratch is deliberately left out: if a sheet is not checked, the report
+  # must say so ("Never read") instead of silently blessing it.
+  - name: workbook integrity
+    excel.integrity:
+      source: report
+      sheets: [Summary, Detail]
+
+  # --- heuristics: flags for a human, never failures -------------------------
+  - name: revenue should not be negative
+    plausibility.bounds:
+      source: orders
+      column: revenue
+      min: 0
+      where: "status == 'shipped'"
