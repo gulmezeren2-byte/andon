@@ -1,9 +1,8 @@
 """Command line interface.
 
-Three commands, no more:
-
     andon run andon.yaml        run a verification spec
     andon inspect report.xlsx   integrity-scan a workbook without writing a spec
+    andon diff old.xlsx new.xlsx  what changed between two workbook versions
     andon init                  write a commented starter spec
 
 Exit codes are a contract (CI depends on them):
@@ -15,15 +14,19 @@ Exit codes are a contract (CI depends on them):
 from __future__ import annotations
 
 import contextlib
+import json
 import sys
 from pathlib import Path
 
 import typer
+from rich import box
 from rich.console import Console
+from rich.table import Table
 
 import andon as _andon
+from andon.diff import DiffReport, diff_workbooks
 from andon.engine import run as run_spec
-from andon.errors import SpecError
+from andon.errors import SourceError, SpecError
 from andon.render import render_json, render_markdown, render_terminal
 from andon.spec import Spec
 
@@ -157,6 +160,92 @@ def inspect(
         typer.echo(render_json(report))
     else:
         render_terminal(report, _console)
+    raise typer.Exit(report.exit_code(strict=strict))
+
+
+_DIFF_STYLE = {
+    "new_error": "bold red",
+    "numeric": "yellow",
+    "formula": "cyan",
+    "text": "white",
+    "appeared": "green",
+    "vanished": "dim",
+}
+
+
+def _render_diff(report: DiffReport, console: Console) -> None:
+    console.print()
+    if not report.changes and not report.sheets_added and not report.sheets_removed:
+        console.print(
+            f"[green]No changes[/] between {report.before} and {report.after} "
+            f"({report.cells_compared} cells compared"
+            + (f", tolerance {report.tolerance}" if report.tolerance else "")
+            + ")."
+        )
+        console.print()
+        return
+
+    for s in report.sheets_added:
+        console.print(f"[green]+ sheet added:[/] {s}")
+    for s in report.sheets_removed:
+        console.print(f"[red]- sheet removed:[/] {s}")
+
+    if report.changes:
+        table = Table(box=box.SIMPLE_HEAD)
+        table.add_column("cell")
+        table.add_column("change")
+        table.add_column("before → after", overflow="fold")
+        for c in report.changes:
+            loc = f"{c.sheet}!{c.coord}"
+            if c.kind == "numeric":
+                move = f"{c.before} → {c.after}  ({c.delta:+g}"
+                move += f", {c.pct:+g}%)" if c.pct is not None else ")"
+            elif c.kind in ("appeared", "vanished"):
+                move = f"{c.after}" if c.kind == "appeared" else f"{c.before}"
+            else:
+                move = f"{c.before} → {c.after}"
+            table.add_row(loc, f"[{_DIFF_STYLE[c.kind]}]{c.kind}[/]", move)
+        console.print(table)
+
+    parts = [f"{report.count(k)} {k}" for k in _DIFF_STYLE if report.count(k)]
+    summary = ", ".join(parts)
+    if report.has_new_errors:
+        console.print(f"[bold red]{summary}[/] — a new error cell is the one to look at first.")
+    else:
+        console.print(f"[dim]{summary}[/]")
+    console.print()
+
+
+@app.command()
+def diff(
+    before: Path = typer.Argument(..., help="The earlier workbook."),
+    after: Path = typer.Argument(..., help="The later workbook."),
+    sheet: list[str] = typer.Option(
+        None, "--sheet", "-s", help="Limit the diff to these worksheets (repeatable)."
+    ),
+    tolerance: str = typer.Option(
+        None, "--tolerance", "-t", help="Hide numeric changes within this (e.g. 0.01 or 0.5%)."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit the diff as JSON."),
+    strict: bool = typer.Option(
+        False, "--strict", help="Exit 1 on any change, not only on a new error."
+    ),
+) -> None:
+    """Diff two workbook versions: what changed, and does it matter?
+
+    Numeric moves come with a delta and a percent; a new #REF! (or other error)
+    is called out on its own. Exit 0 = nothing meaningful changed, 1 = a new
+    error appeared (or, with --strict, any change), 2 = changes but no new error.
+    """
+    try:
+        report = diff_workbooks(before, after, sheets=sheet or None, tolerance=tolerance)
+    except (SourceError, SpecError) as exc:
+        _err.print(f"[bold red]error:[/bold red] {exc}")
+        raise typer.Exit(4) from exc
+    if as_json:
+        typer.echo(json.dumps(report.to_dict(), indent=2, ensure_ascii=True, default=str))
+    else:
+        _render_diff(report, _console)
     raise typer.Exit(report.exit_code(strict=strict))
 
 

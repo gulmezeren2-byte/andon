@@ -165,7 +165,7 @@ Stop a commit before a broken report leaves your machine:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/andon
-    rev: v0.2.1
+    rev: v0.3.0
     hooks:
       - id: andon
         args: ["reports/andon.yaml", "--strict"]
@@ -237,12 +237,33 @@ checks:
       tolerance: 0.5%
 ```
 
+## Diff two workbook versions
+
+"Someone edited the workbook — what actually changed?" `git diff` on an .xlsx is noise,
+and the tools that compare spreadsheets show every changed cell flat. `andon diff`
+classifies each change instead, so a new `#REF!` doesn't hide behind reformatted dates:
+
+```
+andon diff last-week.xlsx this-week.xlsx
+andon diff v1.xlsx v2.xlsx --tolerance 0.5%   # hide numeric moves below 0.5%
+andon diff v1.xlsx v2.xlsx --json             # machine-readable
+```
+
+```
+cell        change      before → after
+Summary!B9  new_error   43.8 → #REF!
+Summary!B4  numeric     261,687.57 → 266,687.57  (+5000, +1.91%)
+```
+
+A new error cell is called out on its own; numeric moves come with a delta and a percent.
+Exit codes: 0 = nothing meaningful changed, 1 = a new error appeared (or, with `--strict`,
+any change), 2 = changes but no new error.
+
 ## Roadmap
 
 Near-term, in order:
 
-- **`andon diff`** — two versions of the same workbook, explained cell by cell
-- **MCP server** exposing `run`/`inspect` to agent harnesses natively
+- **MCP server** exposing `run`/`inspect`/`diff` to agent harnesses natively
 - CSV dialect and encoding controls
 
 Not planned: dashboards, scheduled runners, LLM-powered anything inside the verifier.

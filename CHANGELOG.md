@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-07-17
+
+- **`andon diff`**: compare two workbook versions and classify what changed — a new error
+  cell (`#REF!` …) called out on its own, numeric moves with a delta and a percent, formula
+  edits, appeared/vanished cells, added/removed sheets. `--tolerance` hides numeric noise;
+  `--json` for pipelines. Exit codes: 0 = nothing meaningful changed, 1 = a new error (or
+  `--strict`: any change), 2 = changes but no new error.
+
 ## 0.2.1 — 2026-07-17
 
 - `andon --version` now reads the installed distribution version dynamically, so it can
