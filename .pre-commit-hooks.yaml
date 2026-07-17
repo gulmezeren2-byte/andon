@@ -1,0 +1,11 @@
+- id: andon
+  name: andon
+  description: "Deterministic verification — stop the commit when the numbers don't add up."
+  entry: andon run
+  language: python
+  # andon runs against a spec, not the changed files, so it must always run
+  # once regardless of what was staged (the sqlfluff/gitleaks pattern).
+  args: ["andon.yaml", "--strict"]
+  pass_filenames: false
+  always_run: true
+  require_serial: true

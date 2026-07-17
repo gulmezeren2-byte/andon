@@ -141,13 +141,35 @@ Exit codes are a contract:
 | 3 | nothing was verified — a check could not run, or every check was skipped |
 | 4 | the spec itself is broken |
 
+As a GitHub Action — one line, and the verdict lands in your job summary:
+
 ```yaml
-# in a GitHub Actions job, after your report is generated:
-- run: pip install andon-verify
-- run: andon run reports/andon.yaml --strict --md verdict.md
+- uses: gulmezeren2-byte/andon@v1
+  with:
+    spec: reports/andon.yaml
+    args: "--strict"
 ```
 
-`--md` writes a Markdown verdict you can post as a PR comment.
+Or plainly, in any runner:
+
+```yaml
+- run: pip install andon-verify
+- run: andon run reports/andon.yaml --strict --md verdict.md   # --md → a PR-comment-ready verdict
+```
+
+## As a pre-commit hook
+
+Stop a commit before a broken report leaves your machine:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/gulmezeren2-byte/andon
+    rev: v0.1.0
+    hooks:
+      - id: andon
+        args: ["reports/andon.yaml", "--strict"]
+```
 
 ## Using andon with AI agents
 

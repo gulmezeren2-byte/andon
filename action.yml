@@ -1,0 +1,50 @@
+name: "andon-verify"
+description: "Deterministic verification for AI-generated analysis — stop the CI line when the numbers don't add up."
+author: "Mehmet Eren Gülmez"
+
+inputs:
+  spec:
+    description: "Path to the andon spec (YAML)."
+    required: false
+    default: "andon.yaml"
+  args:
+    description: "Extra arguments passed to `andon run` (e.g. --strict)."
+    required: false
+    default: "--strict"
+  version:
+    description: "andon-verify version to install (blank = latest)."
+    required: false
+    default: ""
+  summary:
+    description: "Write the Markdown verdict to the job summary."
+    required: false
+    default: "true"
+
+branding:
+  icon: "check-circle"
+  color: "red"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install andon
+      shell: bash
+      run: pip install "andon-verify${{ inputs.version && format('==%s', inputs.version) || '' }}"
+
+    - name: Run andon
+      shell: bash
+      run: |
+        # Keep the shell alive on a non-zero verdict so we can surface the
+        # verdict before failing with andon's own exit code (the black model).
+        set +e
+        andon run "${{ inputs.spec }}" ${{ inputs.args }} --md andon-verdict.md
+        code=$?
+        if [ "${{ inputs.summary }}" = "true" ] && [ -f andon-verdict.md ]; then
+          cat andon-verdict.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit $code
