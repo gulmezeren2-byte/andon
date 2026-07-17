@@ -196,6 +196,9 @@ andon is built to be *driven by* agents, not to contain one:
 { "mcpServers": { "andon": { "command": "andon-mcp" } } }
 ```
 
+No local Python? The [`Dockerfile`](Dockerfile) builds the same server:
+`docker build -t andon . && docker run --rm -i -v "$PWD:/work:ro" -w /work andon`.
+
 My working rule: the agent that wrote the analysis also writes the spec, and neither is
 finished until `andon run` exits 0 — or a human has signed off on every flag it raised.
 
