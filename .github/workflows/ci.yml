@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Install
-        run: uv sync --dev
+        run: uv sync --dev --extra duckdb   # so the DuckDB-source tests run, not skip
 
       - name: Lint
         run: uv run ruff check src tests
