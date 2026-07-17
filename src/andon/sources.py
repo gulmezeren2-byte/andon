@@ -3,6 +3,8 @@
 Reference grammar (the string on the right-hand side of `sources:`):
 
     data/orders.csv                 CSV file
+    data/orders.json                JSON: an array of record objects
+    data/events.jsonl               JSON Lines: one object per line (also .ndjson)
     data/orders.parquet             Parquet file (needs pyarrow installed)
     out/report.xlsx                 first worksheet of the workbook
     out/report.xlsx#Summary         a named worksheet
@@ -386,6 +388,20 @@ class SourceStore:
                 ) from exc
             kind = "csv"
             detail = _csv_detail(ref)
+        elif suffix in (".json", ".jsonl", ".ndjson"):
+            # Agents emit JSON; andon should be able to verify it. .json is an
+            # array of record objects; .jsonl/.ndjson is one object per line.
+            lines = suffix in (".jsonl", ".ndjson")
+            try:
+                df = pd.read_json(ref.path, lines=lines)
+            except ValueError as exc:
+                shape = "one JSON object per line" if lines else "an array of records"
+                raise SourceError(
+                    f"Cannot read {ref.path.name} as "
+                    f"{'JSON Lines' if lines else 'JSON'}: {exc}. andon expects {shape}."
+                ) from exc
+            kind = "jsonl" if lines else "json"
+            detail = ""
         elif suffix == ".parquet":
             try:
                 df = pd.read_parquet(ref.path)

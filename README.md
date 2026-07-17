@@ -293,13 +293,13 @@ any change), 2 = changes but no new error.
 ## Roadmap
 
 Shipped since 0.1: a [GitHub Action](#exit-codes-and-ci) and pre-commit hook, DuckDB
-sources, `andon diff`, an [MCP server](#using-andon-with-ai-agents), and CSV
-encoding/delimiter controls.
+sources, `andon diff`, an [MCP server](#using-andon-with-ai-agents), CSV encoding/delimiter
+controls, and JSON/JSONL sources.
 
 Near-term, in order:
 
-- JSON / JSONL sources (an array of records, or one object per line)
 - Row-level diff for data sheets, not just cell-by-cell
+- A `--watch` mode: re-run a spec when its sources change on disk
 
 Not planned: dashboards, scheduled runners, LLM-powered anything inside the verifier.
 The verifier stays deterministic; that is the point.

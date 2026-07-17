@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-07-17
+
+- **JSON and JSONL sources.** A source can now be a `.json` file (an array of record
+  objects) or a `.jsonl`/`.ndjson` file (one object per line), alongside CSV, Excel,
+  parquet and DuckDB. Agents emit JSON; andon can now verify it directly against the data
+  it came from, instead of making you convert to CSV first. Errors name the shape andon
+  expected, so a malformed file fails clearly.
+
 ## 0.5.0 — 2026-07-17
 
 - **CSV encoding and delimiter controls.** A CSV source can now be given as a mapping —

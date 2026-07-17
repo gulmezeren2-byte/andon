@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 # already reserved on PyPI. The import package and the CLI command stay `andon`
 # (like scikit-learn → import sklearn): pip install andon-verify, then `andon run`.
 name = "andon-verify"
-version = "0.5.0"
+version = "0.6.0"
 description = "Deterministic verification for AI-generated analysis. Stop the line when the numbers don't add up."
 readme = "README.md"
 license = "MIT"
