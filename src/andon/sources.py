@@ -8,6 +8,13 @@ Reference grammar (the string on the right-hand side of `sources:`):
     out/report.xlsx#Summary         a named worksheet
     out/report.xlsx#Summary!A1:D50  a rectangular range, first row = header
 
+A CSV source may instead be a mapping, to say how the file should be read:
+
+    { path: data/sales.csv, encoding: cp1254, delimiter: ";" }
+
+`encoding` defaults to utf-8-sig (plain utf-8, and Excel's BOM stripped);
+`delimiter` defaults to a comma. Both apply to CSV sources only.
+
 Inside a check, a *side* narrows a source further:
 
     { source: orders, where: "status != 'cancelled'" }   -> filtered table
@@ -30,7 +37,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -52,9 +59,23 @@ class ParsedRef:
     sheet: str | None = None
     cell_range: str | None = None
     query: str | None = None  # a DuckDB SQL query, for `duckdb:` sources
+    encoding: str | None = None  # CSV only; None means the utf-8-sig default
+    delimiter: str | None = None  # CSV only; None means pandas' comma default
 
 
-def parse_ref(ref: str, base_dir: Path) -> ParsedRef:
+# The options a source given as a mapping may carry.
+_MAPPING_KEYS = {"path", "encoding", "delimiter"}
+
+
+def parse_ref(ref: str | dict[str, Any], base_dir: Path) -> ParsedRef:
+    """A source is either a path string (the common case) or a mapping that
+    carries a `path:` plus CSV read options (`encoding`, `delimiter`)."""
+    if isinstance(ref, dict):
+        return _parse_mapping_ref(ref, base_dir)
+    return _parse_string_ref(ref, base_dir)
+
+
+def _parse_string_ref(ref: str, base_dir: Path) -> ParsedRef:
     ref = ref.strip()
     # A `duckdb:` source is a SQL query, not a file. DuckDB can read CSV/parquet/
     # JSON and .duckdb files inside the query, so this turns "the report vs. a
@@ -84,11 +105,50 @@ def parse_ref(ref: str, base_dir: Path) -> ParsedRef:
     return ParsedRef(path=path, sheet=sheet.strip() if sheet else None, cell_range=cell_range)
 
 
+def _parse_mapping_ref(opts: dict[str, Any], base_dir: Path) -> ParsedRef:
+    unknown = sorted(str(k) for k in opts if k not in _MAPPING_KEYS)
+    if unknown:
+        raise SourceError(
+            f"Unknown source option(s): {', '.join(unknown)}. "
+            f"A source mapping takes: {', '.join(sorted(_MAPPING_KEYS))}."
+        )
+    path_val = opts.get("path")
+    if not isinstance(path_val, str) or not path_val.strip():
+        raise SourceError("A source given as a mapping needs a `path:` string.")
+
+    base = _parse_string_ref(path_val, base_dir)
+
+    encoding = opts.get("encoding")
+    delimiter = opts.get("delimiter")
+    if encoding is not None and not isinstance(encoding, str):
+        raise SourceError("Source `encoding` must be a string like 'utf-8' or 'cp1254'.")
+    if delimiter is not None and (not isinstance(delimiter, str) or len(delimiter) != 1):
+        raise SourceError("Source `delimiter` must be a single character like ',' or ';'.")
+    if (encoding is not None or delimiter is not None) and (
+        base.query is not None or base.path.suffix.lower() != ".csv"
+    ):
+        raise SourceError("`encoding`/`delimiter` apply only to .csv sources.")
+
+    return replace(base, encoding=encoding, delimiter=delimiter)
+
+
+def _csv_detail(ref: ParsedRef) -> str:
+    """Note the CSV read options in the honesty block, but only when they were
+    set explicitly. The default utf-8-sig read stays invisible so the common
+    case gains no report noise."""
+    bits = []
+    if ref.encoding:
+        bits.append(f"encoding {ref.encoding}")
+    if ref.delimiter:
+        bits.append(f"delimiter {ref.delimiter!r}")
+    return ", ".join(bits)
+
+
 class SourceStore:
     """Loads and caches sources for one verification run. Read-only by construction:
     nothing in this class has a code path that writes to disk."""
 
-    def __init__(self, base_dir: Path, sources: dict[str, str]) -> None:
+    def __init__(self, base_dir: Path, sources: dict[str, Any]) -> None:
         self.base_dir = base_dir
         self.refs = {alias: parse_ref(raw, base_dir) for alias, raw in sources.items()}
         self._raw = dict(sources)
@@ -304,12 +364,28 @@ class SourceStore:
 
         suffix = ref.path.suffix.lower()
         if suffix == ".csv":
+            # Default to utf-8-sig: it reads plain utf-8 *and* silently strips a
+            # BOM, which Excel writes and which otherwise poisons the first column
+            # name. Turkish exports are often cp1254 or ;-separated — hence the
+            # explicit `encoding`/`delimiter` options a source mapping can carry.
+            enc = ref.encoding or "utf-8-sig"
+            read_kwargs: dict[str, Any] = {"encoding": enc}
+            if ref.delimiter is not None:
+                read_kwargs["sep"] = ref.delimiter
             try:
-                df = pd.read_csv(ref.path)
+                df = pd.read_csv(ref.path, **read_kwargs)
             except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
                 raise SourceError(f"Cannot read {ref.path.name} as CSV: {exc}") from exc
+            except LookupError as exc:
+                raise SourceError(f"Unknown encoding {enc!r} for {ref.path.name}: {exc}") from exc
+            except UnicodeDecodeError as exc:
+                raise SourceError(
+                    f"Cannot decode {ref.path.name} as {enc!r} — wrong encoding? "
+                    f"Turkish exports are often 'cp1254' or 'utf-8-sig'. "
+                    f"Set it on the source: {{path: ..., encoding: cp1254}}. ({exc})"
+                ) from exc
             kind = "csv"
-            detail = ""
+            detail = _csv_detail(ref)
         elif suffix == ".parquet":
             try:
                 df = pd.read_parquet(ref.path)

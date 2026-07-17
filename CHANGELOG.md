@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-07-17
+
+- **CSV encoding and delimiter controls.** A CSV source can now be given as a mapping —
+  `{path: data/satis.csv, encoding: cp1254, delimiter: ";"}` — instead of a bare path.
+  The default encoding is now `utf-8-sig`, which reads plain utf-8 *and* strips the BOM
+  Excel writes (so it no longer poisons the first column name). A wrong encoding fails
+  with a message that names the likely culprit (Turkish exports are often cp1254),
+  rather than silently mojibaking the data and then "verifying" it.
+
 ## 0.4.0 — 2026-07-17
 
 - **MCP server**: `andon-mcp` exposes three tools to any MCP-speaking agent runtime —

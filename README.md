@@ -227,6 +227,23 @@ finished until `andon run` exits 0 — or a human has signed off on every flag i
   parquet. If you do, tell me what broke.
 - Parquet sources need `pip install 'andon-verify[parquet]'`.
 
+## CSV encoding and delimiter
+
+A CSV source is read as utf-8 by default, and Excel's BOM is stripped so it can't poison
+the first column name. When a file isn't utf-8 — Turkish exports out of Excel are often
+`;`-separated and encoded cp1254 — give the source as a mapping instead of a bare path:
+
+```yaml
+sources:
+  sales:
+    path: data/satis.csv
+    encoding: cp1254      # default: utf-8-sig
+    delimiter: ";"        # default: ","
+```
+
+Get the encoding wrong and andon says so, naming the likely culprit — it does not
+silently mojibake your column names and then "verify" them.
+
 ## Verify against a warehouse query (DuckDB)
 
 A source can be a SQL query instead of a file — so you can reconcile a report against
@@ -275,10 +292,14 @@ any change), 2 = changes but no new error.
 
 ## Roadmap
 
+Shipped since 0.1: a [GitHub Action](#exit-codes-and-ci) and pre-commit hook, DuckDB
+sources, `andon diff`, an [MCP server](#using-andon-with-ai-agents), and CSV
+encoding/delimiter controls.
+
 Near-term, in order:
 
-- **MCP server** exposing `run`/`inspect`/`diff` to agent harnesses natively
-- CSV dialect and encoding controls
+- JSON / JSONL sources (an array of records, or one object per line)
+- Row-level diff for data sheets, not just cell-by-cell
 
 Not planned: dashboards, scheduled runners, LLM-powered anything inside the verifier.
 The verifier stays deterministic; that is the point.

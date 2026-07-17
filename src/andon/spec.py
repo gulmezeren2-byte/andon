@@ -7,6 +7,10 @@ A spec is a YAML file. It names data sources and lists checks against them:
     sources:
       orders: data/orders.csv
       report: out/weekly.xlsx#Summary
+      sales:                       # a mapping carries CSV read options
+        path: data/sales.csv
+        encoding: cp1254           # default utf-8-sig (reads utf-8 + BOM)
+        delimiter: ";"             # default ","
 
     checks:
       - name: no dropped orders
@@ -54,7 +58,7 @@ class CheckSpec:
 class Spec:
     version: int
     base_dir: Path
-    sources: dict[str, str] = field(default_factory=dict)
+    sources: dict[str, Any] = field(default_factory=dict)
     checks: list[CheckSpec] = field(default_factory=list)
     path: str = "<memory>"
 
@@ -72,9 +76,12 @@ class Spec:
 
         raw_sources = data.get("sources", {})
         if not isinstance(raw_sources, dict) or not all(
-            isinstance(k, str) and isinstance(v, str) for k, v in raw_sources.items()
+            isinstance(k, str) and isinstance(v, (str, dict)) for k, v in raw_sources.items()
         ):
-            raise SpecError("`sources` must map alias names to path strings.")
+            raise SpecError(
+                "`sources` must map alias names to a path string, or to a mapping "
+                "with a `path:` plus CSV options (encoding, delimiter)."
+            )
 
         raw_checks = data.get("checks")
         if not isinstance(raw_checks, list) or not raw_checks:
