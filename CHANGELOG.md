@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-07-17
+
+- `andon --version` now reads the installed distribution version dynamically, so it can
+  never drift from `pyproject.toml` again (0.2.0 reported 0.1.0).
+
 ## 0.2.0 — 2026-07-17
 
 - **DuckDB sources**: a source can be a SQL query (`duckdb: SELECT ...`) instead of a

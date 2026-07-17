@@ -165,7 +165,7 @@ Stop a commit before a broken report leaves your machine:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/andon
-    rev: v0.2.0
+    rev: v0.2.1
     hooks:
       - id: andon
         args: ["reports/andon.yaml", "--strict"]

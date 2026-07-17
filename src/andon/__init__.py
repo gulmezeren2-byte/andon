@@ -12,11 +12,18 @@ Everything else (check implementations, source loaders) is internal and may
 change between minor versions.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from andon.engine import run
 from andon.result import CheckResult, Report, Status
 from andon.spec import Spec, load_spec
 
-__version__ = "0.1.0"
+try:
+    # Single source of truth: the installed distribution's version, so
+    # `andon --version` can never drift from pyproject.toml.
+    __version__ = version("andon-verify")
+except PackageNotFoundError:  # pragma: no cover - running from a source tree
+    __version__ = "0.0.0+unknown"
 
 __all__ = [
     "run",
