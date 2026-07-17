@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 2026-07-17
+
+- **DuckDB sources**: a source can be a SQL query (`duckdb: SELECT ...`) instead of a
+  file, so a report can be reconciled against the same data a BI tool reads. DuckDB reads
+  CSV/parquet/JSON and `.duckdb` files inside the query. Optional extra:
+  `pip install 'andon-verify[duckdb]'`.
+- **GitHub Action**: `uses: gulmezeren2-byte/andon@v1` runs a spec in CI and writes the
+  verdict to the job summary.
+- **pre-commit hook**: `.pre-commit-hooks.yaml` ships an `andon` hook, so a broken report
+  can stop a commit.
+
 ## 0.1.0 — 2026-07-16
 
 First public release.

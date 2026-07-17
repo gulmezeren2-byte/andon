@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 # already reserved on PyPI. The import package and the CLI command stay `andon`
 # (like scikit-learn → import sklearn): pip install andon-verify, then `andon run`.
 name = "andon-verify"
-version = "0.1.0"
+version = "0.2.0"
 description = "Deterministic verification for AI-generated analysis. Stop the line when the numbers don't add up."
 readme = "README.md"
 license = "MIT"
@@ -49,6 +49,9 @@ dependencies = [
 
 [project.optional-dependencies]
 parquet = ["pyarrow>=15"]
+duckdb = [
+    "duckdb>=1.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/gulmezeren2-byte/andon"
@@ -94,6 +97,13 @@ no_implicit_optional = true
 [[tool.mypy.overrides]]
 module = ["pandas", "pandas.*", "openpyxl", "openpyxl.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# duckdb is an optional extra; the source module guards its import at runtime.
+# Skip following it (and the numpy it drags in, whose stubs use 3.12+ syntax).
+module = ["duckdb", "duckdb.*", "numpy", "numpy.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

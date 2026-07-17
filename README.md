@@ -165,7 +165,7 @@ Stop a commit before a broken report leaves your machine:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/andon
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: andon
         args: ["reports/andon.yaml", "--strict"]
@@ -213,11 +213,34 @@ finished until `andon run` exits 0 — or a human has signed off on every flag i
   parquet. If you do, tell me what broke.
 - Parquet sources need `pip install 'andon-verify[parquet]'`.
 
+## Verify against a warehouse query (DuckDB)
+
+A source can be a SQL query instead of a file — so you can reconcile a report against
+the same data your BI tool reads, not just against a CSV. With
+`pip install 'andon-verify[duckdb]'`, prefix a source with `duckdb:` and DuckDB runs it
+(it reads CSV, parquet, JSON and `.duckdb` files inside the query; relative paths resolve
+against the spec):
+
+```yaml
+sources:
+  # the report's headline number
+  report: out/q2.xlsx#Summary
+  # the same number, straight from the raw data via SQL
+  truth: "duckdb:SELECT SUM(revenue) AS rev FROM 'data/orders.parquet' WHERE status='shipped'"
+
+checks:
+  - name: revenue matches the warehouse
+    reconcile.sum:
+      column: rev
+      left:  { source: truth }
+      right: { source: report, cell: B6 }
+      tolerance: 0.5%
+```
+
 ## Roadmap
 
 Near-term, in order:
 
-- **SQL sources** (DuckDB) so a side can be a query, not only a file
 - **`andon diff`** — two versions of the same workbook, explained cell by cell
 - **MCP server** exposing `run`/`inspect` to agent harnesses natively
 - CSV dialect and encoding controls

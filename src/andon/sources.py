@@ -28,6 +28,7 @@ Two behaviors here are deliberate and worth knowing:
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,10 +51,20 @@ class ParsedRef:
     path: Path
     sheet: str | None = None
     cell_range: str | None = None
+    query: str | None = None  # a DuckDB SQL query, for `duckdb:` sources
 
 
 def parse_ref(ref: str, base_dir: Path) -> ParsedRef:
     ref = ref.strip()
+    # A `duckdb:` source is a SQL query, not a file. DuckDB can read CSV/parquet/
+    # JSON and .duckdb files inside the query, so this turns "the report vs. a
+    # warehouse query" into a first-class check. Relative paths in the SQL
+    # resolve against the spec directory (path carries base_dir for that).
+    if ref.lower().startswith("duckdb:"):
+        query = ref[len("duckdb:") :].strip()
+        if not query:
+            raise SourceError("A `duckdb:` source needs a SQL query after the prefix.")
+        return ParsedRef(path=base_dir, query=query)
     # '#' introduces a sheet only after an Excel path; '#' is a legal filename
     # character everywhere else (data/report#1.csv is a file, not a sheet ref).
     head = ref.split("#", 1)[0].strip()
@@ -225,10 +236,13 @@ class SourceStore:
         out: list[SourceInfo] = []
         for alias, usage in self._usage.items():
             ref: ParsedRef = usage["ref"]
-            try:
-                display = ref.path.relative_to(self.base_dir).as_posix()
-            except ValueError:
-                display = str(ref.path)
+            if ref.query is not None:
+                display = "(DuckDB query)"
+            else:
+                try:
+                    display = ref.path.relative_to(self.base_dir).as_posix()
+                except ValueError:
+                    display = str(ref.path)
             parts: list[str] = list(dict.fromkeys(usage["frames"]))
             cells = list(dict.fromkeys(usage["cells"]))
             if cells:
@@ -274,6 +288,17 @@ class SourceStore:
         key = (alias, ref.cell_range)
         if key in self._frames:
             return self._frames[key]
+
+        if ref.query is not None:
+            df = self._load_duckdb(ref)
+            df.columns = [str(c).strip() for c in df.columns]
+            self._frames[key] = df
+            usage = self._use(alias, ref, "duckdb")
+            usage["rows"] = len(df)
+            q = ref.query if len(ref.query) <= 60 else ref.query[:57] + "..."
+            usage["frames"].append(f"query: {q}")
+            return df
+
         if not ref.path.is_file():
             raise SourceError(f"Source file not found: {ref.path}")
 
@@ -307,6 +332,29 @@ class SourceStore:
         if detail:
             usage["frames"].append(detail)
         return df
+
+    def _load_duckdb(self, ref: ParsedRef) -> pd.DataFrame:
+        """Run a `duckdb:` source's SQL and return the result as a DataFrame.
+        The query runs with the spec directory as the working directory, so
+        relative file paths inside the SQL (FROM 'data/orders.csv') resolve
+        against the spec, not against wherever andon happened to be launched."""
+        try:
+            import duckdb
+        except ImportError as exc:
+            raise SourceError(
+                "DuckDB sources need the optional dependency: "
+                "pip install 'andon-verify[duckdb]'"
+            ) from exc
+        conn = duckdb.connect(":memory:")
+        cwd = os.getcwd()
+        try:
+            os.chdir(ref.path)  # ref.path is the spec's base_dir for duckdb sources
+            return conn.execute(str(ref.query)).df()
+        except duckdb.Error as exc:
+            raise SourceError(f"DuckDB query failed: {exc}") from exc
+        finally:
+            os.chdir(cwd)
+            conn.close()
 
     def _load_excel_frame(self, alias: str, ref: ParsedRef) -> tuple[pd.DataFrame, str]:
         ws, sheet_name = self._worksheet(alias, ref, values=True)

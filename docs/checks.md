@@ -13,6 +13,7 @@ sources:                         # alias -> reference
   history: data/2025.parquet     # parquet (pip install andon-verify[parquet])
   report: out/q2.xlsx#Summary    # a worksheet
   regions: out/q2.xlsx#Summary!A8:C12   # a range; first row is the header
+  truth: "duckdb:SELECT ... FROM 'data/orders.csv'"  # a SQL query (pip install andon-verify[duckdb])
 
 checks:
   - name: human-readable label   # optional; defaults to the check kind
