@@ -58,11 +58,12 @@ in code, not just promised here:
 ## Install
 
 ```
-pip install git+https://github.com/gulmezeren2-byte/andon
+pip install andon-verify
 ```
 
-A PyPI release (`pip install andon`) follows once the first users have kicked the
-tires.
+The PyPI distribution is named `andon-verify` (the bare `andon` name was already
+taken); the command and the import stay `andon` — `andon run ...`, `import andon`.
+From source: `pip install git+https://github.com/gulmezeren2-byte/andon`.
 
 ## Quick start
 
@@ -142,7 +143,7 @@ Exit codes are a contract:
 
 ```yaml
 # in a GitHub Actions job, after your report is generated:
-- run: pip install andon
+- run: pip install andon-verify
 - run: andon run reports/andon.yaml --strict --md verdict.md
 ```
 
@@ -188,7 +189,7 @@ finished until `andon run` exits 0 — or a human has signed off on every flag i
 - **Scale is untested beyond mid-size files.** Everyday operational workbooks and CSVs
   (hundreds of thousands of rows) are fine; nobody has benchmarked it against 10 GB of
   parquet. If you do, tell me what broke.
-- Parquet sources need `pip install 'andon[parquet]'`.
+- Parquet sources need `pip install 'andon-verify[parquet]'`.
 
 ## Roadmap
 

@@ -3,7 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "andon"
+# The PyPI distribution name is "andon-verify" because the bare "andon" name is
+# already reserved on PyPI. The import package and the CLI command stay `andon`
+# (like scikit-learn → import sklearn): pip install andon-verify, then `andon run`.
+name = "andon-verify"
 version = "0.1.0"
 description = "Deterministic verification for AI-generated analysis. Stop the line when the numbers don't add up."
 readme = "README.md"
@@ -63,6 +66,10 @@ dev = [
     "mypy>=1.11",
     "types-PyYAML",
 ]
+
+[tool.hatch.build.targets.wheel]
+# Distribution name is andon-verify, but the package on disk is `andon`.
+packages = ["src/andon"]
 
 [tool.ruff]
 line-length = 100

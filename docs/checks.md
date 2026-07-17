@@ -10,7 +10,7 @@ version: 1                       # required; this build supports version 1
 
 sources:                         # alias -> reference
   orders: data/orders.csv        # csv
-  history: data/2025.parquet     # parquet (pip install andon[parquet])
+  history: data/2025.parquet     # parquet (pip install andon-verify[parquet])
   report: out/q2.xlsx#Summary    # a worksheet
   regions: out/q2.xlsx#Summary!A8:C12   # a range; first row is the header
 
