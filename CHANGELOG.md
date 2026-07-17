@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 — 2026-07-17
+
+- **MCP server**: `andon-mcp` exposes three tools to any MCP-speaking agent runtime —
+  `run` (execute a spec), `inspect` (integrity-scan a workbook with no spec written), and
+  `diff` (classify what changed between two workbook versions). The agent gets the same
+  structured verdict a human gets. Optional extra: `pip install 'andon-verify[mcp]'`.
+
 ## 0.3.0 — 2026-07-17
 
 - **`andon diff`**: compare two workbook versions and classify what changed — a new error

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gulmezeren2-byte/andon",
+  "title": "andon",
+  "description": "Deterministic verification for AI-generated analysis: run a spec, integrity-scan an Excel workbook, or diff two versions — and get a structured verdict back, not prose. Needs the [mcp] extra: pip install 'andon-verify[mcp]'.",
+  "repository": {
+    "url": "https://github.com/gulmezeren2-byte/andon",
+    "source": "github"
+  },
+  "version": "0.4.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "andon-verify",
+      "version": "0.4.0",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # andon
 
+<!-- mcp-name: io.github.gulmezeren2-byte/andon -->
+
 **Stop the line when the numbers don't add up.**
 
 [![CI](https://github.com/gulmezeren2-byte/andon/actions/workflows/ci.yml/badge.svg)](https://github.com/gulmezeren2-byte/andon/actions/workflows/ci.yml)
@@ -184,6 +186,15 @@ andon is built to be *driven by* agents, not to contain one:
   Code and compatible harnesses that teaches an agent the discipline: after drafting any
   analysis, write the spec, run andon, and report the verdict — including the rule that
   loosening a tolerance to make a check pass must be declared, never silent.
+- **MCP server.** `pip install 'andon-verify[mcp]'` and run `andon-mcp` to expose three
+  tools to any MCP-speaking runtime: `run` (execute a spec), `inspect` (integrity-scan a
+  workbook with no spec), and `diff` (classify what changed between two versions). The
+  agent gets the same structured verdict a human gets — not prose it has to parse back.
+
+```jsonc
+// e.g. Claude Desktop / Claude Code mcp config
+{ "mcpServers": { "andon": { "command": "andon-mcp" } } }
+```
 
 My working rule: the agent that wrote the analysis also writes the spec, and neither is
 finished until `andon run` exits 0 — or a human has signed off on every flag it raised.
