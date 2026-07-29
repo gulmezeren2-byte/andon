@@ -89,6 +89,23 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _use_utf8_output() -> None:
+    """Make stdout/stderr able to carry the text this tool exists to print.
+
+    Findings quote the workbook: sheet names, labels and cell values, which are
+    routinely non-ASCII. On Windows a *piped* stdout gets the legacy code page, where
+    those characters raise UnicodeEncodeError and take the whole command down —
+    `andon run spec.yaml | tee` must not crash. Ask for UTF-8, and never fail if the
+    stream won't take it.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        with contextlib.suppress(OSError, ValueError):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 @app.callback()
 def _root(
     version: bool = typer.Option(
@@ -97,6 +114,7 @@ def _root(
     ),
 ) -> None:
     """andon — stop the line when the numbers don't add up."""
+    _use_utf8_output()
 
 
 @app.command()

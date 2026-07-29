@@ -103,3 +103,39 @@ def test_version_flag(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "andon" in result.output
+
+
+def test_utf8_guard_survives_a_legacy_code_page() -> None:
+    """A piped stdout on Windows gets the legacy code page, where non-ASCII workbook text
+    raises UnicodeEncodeError and kills the command. The guard must prevent that."""
+    import io
+    import sys
+
+    from andon.cli import _console, _use_utf8_output
+
+    original = sys.stdout
+    sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", newline="")
+    try:
+        _use_utf8_output()
+        _console.print("ÖZKAN İNŞAAT LTD. ŞTİ. — Lavabo tesisatı (Ölçü: Ad.), kırım %32,5")
+    finally:
+        sys.stdout = original
+
+
+def test_utf8_guard_tolerates_a_stream_without_reconfigure() -> None:
+    import sys
+
+    from andon.cli import _use_utf8_output
+
+    class Bare:
+        encoding = "cp1252"
+
+        def write(self, text: str) -> int:  # pragma: no cover - not exercised
+            return len(text)
+
+    original_out, original_err = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = Bare(), Bare()
+    try:
+        _use_utf8_output()  # must not raise
+    finally:
+        sys.stdout, sys.stderr = original_out, original_err

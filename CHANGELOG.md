@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-07-29
+
+- **Fixed a crash when output is piped on Windows.** A piped stdout gets the legacy
+  code page rather than UTF-8, and findings quote the workbook — sheet names, labels
+  and cell values, routinely non-ASCII — which raised `UnicodeEncodeError` and took the
+  command down. So `andon run spec.yaml | tee`, and any CI step capturing the log,
+  failed on ordinary data. Output streams are now asked for UTF-8, and the guard never
+  fails if a stream won't take it.
+
 ## 0.6.0 — 2026-07-17
 
 - **JSON and JSONL sources.** A source can now be a `.json` file (an array of record
