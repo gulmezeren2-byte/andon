@@ -311,6 +311,12 @@ I design the checks, decide the semantics and review every line; I use AI agents
 bothers you, read `tests/` first: the suite builds real CSV and XLSX fixtures, no
 mocks, and it is the contract. Tests don't care who typed them.
 
+## Related
+
+- **[opsaudit](https://github.com/gulmezeren2-byte/opsaudit)** — the same instinct, one level up: operations analytics that audits its own numbers instead of trusting them. `andon` checks a finished report against its sources; `opsaudit` computes the metrics with the honesty block built in.
+
+More tools by [Eren Gülmez](https://github.com/gulmezeren2-byte?tab=repositories).
+
 ## License
 
 [MIT](LICENSE) — Mehmet Eren Gülmez
