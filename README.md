@@ -5,6 +5,7 @@
 **Stop the line when the numbers don't add up.**
 
 [![CI](https://github.com/gulmezeren2-byte/andon/actions/workflows/ci.yml/badge.svg)](https://github.com/gulmezeren2-byte/andon/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/andon-verify)](https://pypi.org/project/andon-verify/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -167,7 +168,7 @@ Stop a commit before a broken report leaves your machine:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/andon
-    rev: v0.3.0
+    rev: v0.6.2
     hooks:
       - id: andon
         args: ["reports/andon.yaml", "--strict"]
