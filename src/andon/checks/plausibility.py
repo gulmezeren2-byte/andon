@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from andon.checks import Outcome, register, reject_unknown, require, sample
+from andon.checks import Outcome, examine, register, reject_unknown, require, sample
 from andon.errors import SourceError, SpecError
 from andon.result import Status
 from andon.sources import SourceStore
@@ -49,10 +49,8 @@ def bounds(store: SourceStore, params: dict[str, Any]) -> Outcome:
     df = store.frame(alias, params.get("where"))
     if column not in df.columns:
         raise SourceError(f"{kind}: column {column!r} not found.")
-    raw = df[column]
-    coerced = pd.to_numeric(raw, errors="coerce")
-    non_numeric = int(coerced.isna().sum() - raw.isna().sum())
-    series = coerced.dropna()
+    seen = examine(df[column])
+    series = seen.values
 
     below = series[series < lo] if lo is not None else series.iloc[0:0]
     above = series[series > hi] if hi is not None else series.iloc[0:0]
@@ -62,8 +60,9 @@ def bounds(store: SourceStore, params: dict[str, Any]) -> Outcome:
         "column": column,
         "min": lo,
         "max": hi,
-        "values_checked": int(len(series)),
-        "non_numeric_ignored": non_numeric,
+        "values_checked": seen.checked,
+        "values_total": seen.total,
+        "values_skipped": seen.skipped,
         "below_min": int(len(below)),
         "above_max": int(len(above)),
         "sample_out_of_bounds": sample(
@@ -77,13 +76,28 @@ def bounds(store: SourceStore, params: dict[str, Any]) -> Outcome:
     else:
         bounds_text = f"above {hi}"
 
+    # Nothing readable means nothing was compared, and "no values fell outside the
+    # bounds" would be true only in the way that vacuous statements are true. A
+    # column of Turkish-locale amounts ("1.234,56") reads as text, so this is the
+    # ordinary case, not an exotic one.
+    if seen.nothing:
+        return Outcome(
+            Status.REVIEW,
+            f"no numeric values in {column}; nothing was compared against the bounds",
+            evidence,
+        )
     if n_bad == 0:
+        if seen.partial:
+            return Outcome(
+                Status.REVIEW,
+                f"{column} stays within bounds, but only {seen.coverage(column)}",
+                evidence,
+            )
         return Outcome(Status.PASS, f"{column} stays within bounds", evidence)
-    return Outcome(
-        Status.REVIEW,
-        f"{n_bad} value(s) of {column} fall {bounds_text}; look before you trust",
-        evidence,
-    )
+    detail = f"{n_bad} value(s) of {column} fall {bounds_text}; look before you trust"
+    if seen.partial:
+        detail += f" ({seen.coverage(column)})"
+    return Outcome(Status.REVIEW, detail, evidence)
 
 
 @register("plausibility.new_categories", heuristic=True)
@@ -126,12 +140,9 @@ def mean_shift(store: SourceStore, params: dict[str, Any]) -> Outcome:
     if max_sigmas <= 0:
         raise SpecError(f"{kind}: `max_sigmas` must be positive.")
 
-    base = pd.to_numeric(
-        _series(store, require(params, "left", kind), column, kind, "left"), errors="coerce"
-    ).dropna()
-    candidate = pd.to_numeric(
-        _series(store, require(params, "right", kind), column, kind, "right"), errors="coerce"
-    ).dropna()
+    left = examine(_series(store, require(params, "left", kind), column, kind, "left"))
+    right = examine(_series(store, require(params, "right", kind), column, kind, "right"))
+    base, candidate = left.values, right.values
     if base.empty or candidate.empty:
         raise SourceError(f"{kind}: one of the sides has no numeric data in {column!r}.")
 
@@ -148,16 +159,35 @@ def mean_shift(store: SourceStore, params: dict[str, Any]) -> Outcome:
         "candidate_mean": round(cand_mean, 6),
         "shift_sigmas": round(sigmas, 3) if sigmas != float("inf") else "inf",
         "max_sigmas": max_sigmas,
+        "baseline_values_checked": left.checked,
+        "baseline_values_total": left.total,
+        "candidate_values_checked": right.checked,
+        "candidate_values_total": right.total,
     }
+    # A mean taken over the values that happened to parse is a statement about the
+    # data we chose, not the data we were handed. Whichever way it lands, say so.
+    partial = [
+        f"{side} {seen.coverage(column)}"
+        for side, seen in (("baseline:", left), ("candidate:", right))
+        if seen.partial
+    ]
     if sigmas <= max_sigmas:
+        if partial:
+            return Outcome(
+                Status.REVIEW,
+                f"mean of {column} within {max_sigmas} sigma of baseline, but "
+                + "; ".join(partial),
+                evidence,
+            )
         return Outcome(
             Status.PASS,
             f"mean of {column} within {max_sigmas} sigma of baseline",
             evidence,
         )
-    return Outcome(
-        Status.REVIEW,
+    detail = (
         f"mean of {column} moved {evidence['shift_sigmas']} sigma against baseline; "
-        f"plausible, but somebody should know why",
-        evidence,
+        f"plausible, but somebody should know why"
     )
+    if partial:
+        detail += " (" + "; ".join(partial) + ")"
+    return Outcome(Status.REVIEW, detail, evidence)

@@ -114,6 +114,53 @@ def numeric_series(df: pd.DataFrame, column: str, context: str) -> pd.Series:
     return coerced
 
 
+@dataclass(frozen=True)
+class Examined:
+    """The numbers a heuristic could actually look at, and how many it could not.
+
+    The hard checks call `numeric_series`, which refuses outright when a column
+    contains text. Heuristics cannot do that — they are contractually unable to fail
+    a run — so they take what they can read and carry the denominator with them.
+
+    That denominator is the whole point. A heuristic that quietly drops half a column
+    and then reports how the surviving half looks is stating an average of data it
+    chose, not of the data it was given. And one that drops *every* value has examined
+    nothing at all, which is never a PASS.
+
+    `skipped` counts everything unusable, whether it failed to coerce here or was
+    already NaN when pandas read the file — `n/a`, `-`, `#N/A` and friends are in
+    pandas' default `na_values`, so they never reach `to_numeric` and a coerce-delta
+    alone reports them as zero.
+    """
+
+    values: pd.Series
+    total: int
+
+    @property
+    def checked(self) -> int:
+        return int(len(self.values))
+
+    @property
+    def skipped(self) -> int:
+        return self.total - self.checked
+
+    @property
+    def nothing(self) -> bool:
+        return self.total > 0 and self.checked == 0
+
+    @property
+    def partial(self) -> bool:
+        return self.skipped > 0 and self.checked > 0
+
+    def coverage(self, column: str) -> str:
+        return f"read {self.checked} of {self.total} value(s) of {column}"
+
+
+def examine(raw: pd.Series) -> Examined:
+    """What a heuristic can read from a column, with the denominator kept."""
+    return Examined(pd.to_numeric(raw, errors="coerce").dropna(), int(len(raw)))
+
+
 def group_labels(series: pd.Series) -> tuple[pd.Series, int]:
     """Group-key labels as strings, with nulls made explicit.
 

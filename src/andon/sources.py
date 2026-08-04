@@ -12,10 +12,13 @@ Reference grammar (the string on the right-hand side of `sources:`):
 
 A CSV source may instead be a mapping, to say how the file should be read:
 
-    { path: data/sales.csv, encoding: cp1254, delimiter: ";" }
+    { path: data/sales.csv, encoding: cp1254, delimiter: ";", decimal: ",", thousands: "." }
 
-`encoding` defaults to utf-8-sig (plain utf-8, and Excel's BOM stripped);
-`delimiter` defaults to a comma. Both apply to CSV sources only.
+`encoding` defaults to utf-8-sig (plain utf-8, and Excel's BOM stripped) and
+`delimiter` to a comma. `decimal`/`thousands` say how numbers are punctuated:
+Turkish Excel writes `1.234,56`, which reads as text under the defaults — and a
+column of text is a column no numeric check can examine. All four apply to CSV
+sources only.
 
 Inside a check, a *side* narrows a source further:
 
@@ -63,10 +66,12 @@ class ParsedRef:
     query: str | None = None  # a DuckDB SQL query, for `duckdb:` sources
     encoding: str | None = None  # CSV only; None means the utf-8-sig default
     delimiter: str | None = None  # CSV only; None means pandas' comma default
+    decimal: str | None = None  # CSV only; None means "."
+    thousands: str | None = None  # CSV only; None means no grouping separator
 
 
 # The options a source given as a mapping may carry.
-_MAPPING_KEYS = {"path", "encoding", "delimiter"}
+_MAPPING_KEYS = {"path", "encoding", "delimiter", "decimal", "thousands"}
 
 
 def parse_ref(ref: str | dict[str, Any], base_dir: Path) -> ParsedRef:
@@ -126,12 +131,24 @@ def _parse_mapping_ref(opts: dict[str, Any], base_dir: Path) -> ParsedRef:
         raise SourceError("Source `encoding` must be a string like 'utf-8' or 'cp1254'.")
     if delimiter is not None and (not isinstance(delimiter, str) or len(delimiter) != 1):
         raise SourceError("Source `delimiter` must be a single character like ',' or ';'.")
-    if (encoding is not None or delimiter is not None) and (
+    decimal = opts.get("decimal")
+    thousands = opts.get("thousands")
+    for name, value in (("decimal", decimal), ("thousands", thousands)):
+        if value is not None and (not isinstance(value, str) or len(value) != 1):
+            raise SourceError(f"Source `{name}` must be a single character like ',' or '.'.")
+    if decimal is not None and decimal == thousands:
+        raise SourceError("`decimal` and `thousands` cannot be the same character.")
+
+    if any(v is not None for v in (encoding, delimiter, decimal, thousands)) and (
         base.query is not None or base.path.suffix.lower() != ".csv"
     ):
-        raise SourceError("`encoding`/`delimiter` apply only to .csv sources.")
+        raise SourceError(
+            "`encoding`/`delimiter`/`decimal`/`thousands` apply only to .csv sources."
+        )
 
-    return replace(base, encoding=encoding, delimiter=delimiter)
+    return replace(
+        base, encoding=encoding, delimiter=delimiter, decimal=decimal, thousands=thousands
+    )
 
 
 def _csv_detail(ref: ParsedRef) -> str:
@@ -143,6 +160,10 @@ def _csv_detail(ref: ParsedRef) -> str:
         bits.append(f"encoding {ref.encoding}")
     if ref.delimiter:
         bits.append(f"delimiter {ref.delimiter!r}")
+    if ref.decimal:
+        bits.append(f"decimal {ref.decimal!r}")
+    if ref.thousands:
+        bits.append(f"thousands {ref.thousands!r}")
     return ", ".join(bits)
 
 
@@ -374,6 +395,12 @@ class SourceStore:
             read_kwargs: dict[str, Any] = {"encoding": enc}
             if ref.delimiter is not None:
                 read_kwargs["sep"] = ref.delimiter
+            # Without these, `1.234,56` reads as text and every numeric check has
+            # nothing to examine — which now surfaces as REVIEW rather than passing.
+            if ref.decimal is not None:
+                read_kwargs["decimal"] = ref.decimal
+            if ref.thousands is not None:
+                read_kwargs["thousands"] = ref.thousands
             try:
                 df = pd.read_csv(ref.path, **read_kwargs)
             except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:

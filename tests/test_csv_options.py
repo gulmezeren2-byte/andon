@@ -11,8 +11,10 @@ import csv
 from pathlib import Path
 
 import pytest
+from conftest import one
 
 from andon.errors import SourceError
+from andon.result import Status
 from andon.sources import SourceStore, parse_ref
 
 BASE = Path(".")
@@ -148,3 +150,69 @@ def test_mapping_runs_end_to_end(tmp_path: Path, run_spec) -> None:  # type: ign
         }
     )
     assert report.verdict == "PASS"
+
+
+# --------------------------------------------------------------------------- #
+# Turkish Excel writes `1.234,56`. Under the defaults that reads as text, and a
+# column of text is a column no numeric check can examine — so `encoding` and
+# `delimiter` were only two thirds of what a Turkish export needs.
+# --------------------------------------------------------------------------- #
+def test_turkish_punctuation_reads_as_numbers(tmp_path: Path, run_spec) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "tr.csv").write_text(
+        "siparis;tutar\nA;1.234,56\nB;2.000,00\n", encoding="utf-8"
+    )
+    report = run_spec(
+        {
+            "version": 1,
+            "sources": {
+                "tr": {"path": "tr.csv", "delimiter": ";", "decimal": ",", "thousands": "."}
+            },
+            "checks": [
+                {
+                    "plausibility.bounds": {
+                        "source": "tr", "column": "tutar", "min": 1000, "max": 3000
+                    }
+                }
+            ],
+        }
+    )
+    r = one(report)
+    assert r.status is Status.PASS
+    # both values were read — not silently discarded and called clean
+    assert (r.evidence["values_checked"], r.evidence["values_total"]) == (2, 2)
+
+
+def test_without_the_options_the_same_file_is_not_silently_passed(
+    tmp_path: Path, run_spec
+) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "tr.csv").write_text(
+        "siparis;tutar\nA;1.234,56\nB;2.000,00\n", encoding="utf-8"
+    )
+    report = run_spec(
+        {
+            "version": 1,
+            "sources": {"tr": {"path": "tr.csv", "delimiter": ";"}},
+            "checks": [
+                {"plausibility.bounds": {"source": "tr", "column": "tutar", "min": 1000}}
+            ],
+        }
+    )
+    r = one(report)
+    assert r.status is Status.REVIEW
+    assert "nothing was compared" in r.summary
+
+
+def test_decimal_and_thousands_must_differ(tmp_path: Path, run_spec) -> None:  # type: ignore[no-untyped-def]
+    # a character that is both the decimal point and the thousands mark cannot be
+    # read either way; refusing beats picking one and being quietly wrong
+    (tmp_path / "tr.csv").write_text("a\n1\n", encoding="utf-8")
+    with pytest.raises(SourceError, match="cannot be the same"):
+        run_spec(
+            {
+                "version": 1,
+                "sources": {"tr": {"path": "tr.csv", "decimal": ",", "thousands": ","}},
+                "checks": [
+                    {"reconcile.row_count": {"left": {"source": "tr"}, "right": {"value": 1}}}
+                ],
+            }
+        )

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.7.0 — 2026-08-03
+
+Fixes a false PASS. A plausibility check that could not read a single value was
+reporting that nothing fell outside the bounds — which was true only in the way that
+vacuous statements are true.
+
+- **A check that examined nothing no longer passes.** `plausibility.bounds` coerced its
+  column to numbers, dropped what would not convert, and then found zero values out of
+  bounds in the empty remainder. Given a Turkish Excel export — `1.234,56`, `;`-separated,
+  the ordinary shape in this tool's home market — the whole column reads as text, and a
+  bound of `min: 999999999` came back **PASS**. It now reports
+  *"no numeric values in `tutar`; nothing was compared against the bounds"*.
+  For a tool that prints *"a PASS is not an opinion about the analysis; it is arithmetic
+  about these claims"* under every report, this was the one defect it could not afford.
+- **Partial reads carry their denominator.** When only some of a column parses, the
+  verdict says so — *"stays within bounds, but only read 2 of 4 value(s)"* — and
+  `plausibility.mean_shift` does the same rather than reporting the mean of whatever
+  happened to convert as though it were the mean of the data. Evidence now carries
+  `values_checked` / `values_total` / `values_skipped` on both.
+- **The skipped count was wrong, too.** It was computed as a coercion delta, so values
+  pandas had already turned into `NaN` while *reading* — `n/a`, `-`, `#N/A`, all in its
+  default `na_values` — were dropped silently and reported as zero skipped.
+- **CSV sources take `decimal` and `thousands`.** `encoding` and `delimiter` existed for
+  exactly this reason and stopped one step short: without saying how numbers are
+  punctuated, a Turkish file could be read but never measured. Declaring
+  `decimal: ","` and `thousands: "."` makes the column checkable; the two must differ,
+  and a source that sets them to the same character is refused rather than guessed at.
+- Clean numeric data still passes silently. The fix adds no noise to a run that had
+  nothing wrong with it, which a regression test pins.
+
+
 ## 0.6.2 — 2026-07-30
 
 - **Fixed: the MCP server would not start with version 2 of the MCP SDK.** The SDK

@@ -228,11 +228,12 @@ finished until `andon run` exits 0 — or a human has signed off on every flag i
   parquet. If you do, tell me what broke.
 - Parquet sources need `pip install 'andon-verify[parquet]'`.
 
-## CSV encoding and delimiter
+## CSV encoding, delimiter, and how numbers are punctuated
 
 A CSV source is read as utf-8 by default, and Excel's BOM is stripped so it can't poison
 the first column name. When a file isn't utf-8 — Turkish exports out of Excel are often
-`;`-separated and encoded cp1254 — give the source as a mapping instead of a bare path:
+`;`-separated, encoded cp1254, and write amounts as `1.234,56` — give the source as a
+mapping instead of a bare path:
 
 ```yaml
 sources:
@@ -240,10 +241,45 @@ sources:
     path: data/satis.csv
     encoding: cp1254      # default: utf-8-sig
     delimiter: ";"        # default: ","
+    decimal: ","          # default: "."
+    thousands: "."        # default: none
 ```
 
 Get the encoding wrong and andon says so, naming the likely culprit — it does not
 silently mojibake your column names and then "verify" them.
+
+The last two matter more than they look. Without them `1.234,56` is read as **text**, and
+a column of text is a column a numeric check cannot examine. andon will tell you that
+rather than pass — see below — but declaring the punctuation is what makes the column
+checkable in the first place.
+
+## What a check does when it can't read the data
+
+Every report ends with the same line: *a PASS is not an opinion about the analysis; it is
+arithmetic about these claims.* That obliges the checks to distinguish two things a
+careless implementation runs together:
+
+- **"I compared them and they were fine"** — a PASS.
+- **"I had nothing to compare"** — never a PASS.
+
+So a plausibility check that finds no numeric values says so, instead of reporting that
+zero values fell outside the bounds:
+
+```
+REVIEW  bounds  no numeric values in tutar; nothing was compared against the bounds
+```
+
+And when only part of a column is readable, the verdict carries the denominator, because
+a statement about the half that parsed is not a statement about the data you handed over:
+
+```
+REVIEW  bounds  tutar stays within bounds, but only read 2 of 4 value(s) of tutar
+```
+
+Every such check reports `values_checked`, `values_total` and `values_skipped` in its
+evidence, so the coverage is machine-readable too. Values that pandas turns into `NaN` at
+read time — `n/a`, `-`, `#N/A` — are counted as skipped like anything else; they are
+invisible to a naive coercion count, which is exactly how they used to go unnoticed.
 
 ## Verify against a warehouse query (DuckDB)
 
